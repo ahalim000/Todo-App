@@ -1,0 +1,37 @@
+.
+├── .gitignore # File containing patterns which indicate other folders/files which git should ignore when tracking changes.
+├── .git # Directory containing information about revisions to the codebase which have been commited.
+├── setup.py # Python package setup information. Informs the package name, version, dependencies, package location, any cli scripts which should be created, and more...
+├── src # Source code directory for the actual project. The location of the modules which comprise a complete python package is variable but must agree with setup.py.
+│   ├── todo # The directory representing the todo python module. Must have an file __init__.py as a direct descendent for python to treat this directory as a module.
+│   │   ├── __init__.py # Indicates that the parent directory (todo) is a python module. When todo is imported, __init__.py is what is actually executed to "load" the module.
+│   │   ├── __main__.py # Conventional CLI entrypoint file (where the program starts running). Automatically called when using the "python -m <module>" syntax.
+│   │   ├── __pycache__ # Cache directory created by the python interpretor to speed up subsequent executions of this program. Should be ignored.
+│   │   ├── backend # The directory representing the backend submodule of the todo module. Must have an file __init__.py as a direct descendent for python to treat this directory as a module.
+│   │   │   ├── __init__.py # Indicates that the parent directory (backend) is a python module. When todo is imported, __init__.py is what is actually executed to "load" the module.
+│   │   │   ├── __pycache__ # Cache directory created by the python interpretor to speed up subsequent executions of this program. Should be ignored.
+│   │   │   └── app.py # This file represent the submodule app of backend. The full path to this module would be todo.backend.app and since this is a file, when the module is imported this file is executed.
+│   │   └── test.py # Project specific file. Technically submodule test of todo. Full path is todo.test.
+│   └── todo.egg-info # Python packaging Metdata created by pip. Should be ignored.
+└── venv # Virtual env directory. Can be named anything when created by venv is very common.
+    ├── bin # Directory containg Python binaries. This includes the "base" virtualenv binaries/scripts and any script entrypoint indicated by the setup.py of internal/extrenal packages.
+    │   ├── activate # Script used to "activate" this virtualenv. Will add the bin directory to the PATH envvar and setup other relevant envvars.
+    │   ├── gunicorn # Entrypoint script to call into the gunicorn module. Installed when gunicorn is pip installed.
+    │   ├── pip # Python package manager. Used to install local and 3rd-party packages.
+    │   ├── pip3 # Alias for pip.
+    │   ├── pip3.8 # Alias for pip.
+    │   ├── python -> python3 # Local virtualenv python distribution. Distinct from system python (but may be a symlink).
+    │   ├── python3 -> /usr/bin/python3 # Alias to python.
+    │   ├── todo # Local package console script as indicated in setup.py. Used to access the todo CLI.
+    ├── include # Can ususally be ignored. Certain python module written in C may require this directory.
+    ├── lib # Virtual environment library path. Primary source of python packages, that is, the location in which system libaries and 3rd party libraries are found.
+    │   └── python3.8 # Subdirecotry of lib. Must match Python version. May contain python standard library packages otherwise python uses system packages.
+    │       └── site-packages # Actual directory with 3rd-party packages. When you install anything with pip, the contents end up here. Limited examples show below.
+    │           ├── Flask-2.2.2.dist-info # Metadata about 3rd party package installation including version installed/name/dependencies/etc.
+    │           ├── flask # Actual flask package source code. Note that python modules do not typically contain information about their release version/name in the source code itself but rather in setup.py.
+    │           ├── todo.egg-link # Link to local directory containing Python source code. The result of installing with the -e flag and allows changes to the source code to be reflected immediatley instead of having to re-install the package.
+    ├── lib64 -> lib # Alias to lib directory.
+    ├── pyvenv.cfg # Python virtualenv configuration. Should be ignored.
+    └── share # Download location for python packages. The format of these package are "pre-installation" and they interally zipped.
+        └── python-wheels # Type of downloaded packages.
+            ├── idna-2.8-py2.py3-none-any.whl # Actual compressed package. Called a wheel file.
