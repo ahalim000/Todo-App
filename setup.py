@@ -6,5 +6,5 @@ setup(
     packages=find_packages(include=["src"]),
     package_dir={"": "src"},
     install_requires=["click", "requests", "flask", "gunicorn"],
-    entry_points={"console_scripts": ["todo=todo.__main__:cli"]},
+    entry_points={"console_scripts": ["todo-cli=todo.__main__:cli"]},
 )
