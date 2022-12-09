@@ -1,4 +1,6 @@
-from todo.backend.app import app, db
+from todo.backend.app import init_app
 
-with app.app_context():
-    db.create_all()
+app = init_app()
+
+# with app.app_context():
+#     db.create_all()
