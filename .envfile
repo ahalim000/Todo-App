@@ -1,0 +1,2 @@
+TODO_SECRET_KEY=b5006c1d5645ad98c91fa1a87d0c9bad597bd95026d87e23cad6abed3cdd6f25
+TODO_DATABASE_URL=postgresql:///todos

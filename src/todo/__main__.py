@@ -5,6 +5,7 @@ import json
 import requests
 from typing import Optional
 
+
 # Client -> Server -> DB
 # Client -> DB X
 # (Many) Clients -> Server

@@ -9,11 +9,11 @@ class Flask:
         self.routes = {}
 
     def route(self, path: str):
-        def outer(f):
+        def decorator(f):
             self.routes[path] = f
             return f
 
-        return outer
+        return decorator
 
     def dispatch(self, path: str):
         return self.routes[path]()
@@ -92,21 +92,28 @@ person = Person2(first_name="Jules", last_name="Skrill", age=27)
 # pprint(dict(person.get_class_attributes()))
 
 
+class Person3:
+    def __init__(self, first_name, last_name, age):
+        self.first_name = first_name
+        self.last_name = last_name
+        self.age = age
+
+
 class PersonBuilder:
     def __init__(self):
         self._first_name = None
         self._last_name = None
         self._age = None
 
-    def first_name(self, first_name):
+    def set_first_name(self, first_name):
         self._first_name = first_name
         return self
 
-    def last_name(self, last_name):
+    def set_last_name(self, last_name):
         self._last_name = last_name
         return self
 
-    def age(self, age):
+    def set_age(self, age):
         self._age = age
         return self
 
@@ -114,12 +121,30 @@ class PersonBuilder:
         if self._first_name is None or self._last_name is None or self._age is None:
             raise Exception("Missing required attributes")
 
-        return Person2(first_name=self._first_name, last_name=self._last_name, age=self._age)
+        return Person3(first_name=self._first_name, last_name=self._last_name, age=self._age)
 
 
-# builder = PersonBuilder()
-# person = builder.first_name("Jules").last_name("Skrill").age(27).execute()
-# print(person.first_name, person.last_name, person.age)
+class Query:
+    def __init__(self, model, joins=None, filters=None):
+        self.model = model
+        self.joins = joins if joins is not None else []
+        self.filters = filters if filters is not None else []
+
+    def filter_by(self, filter_obj):
+        self.filters.append(filter_obj)
+        return self
+
+    def join(self, db_class):
+        self.joins.append(db_class)
+        return self
+
+    def clone(self):
+        return Query(self.model, self.joins, self.filters)
+
+
+builder = PersonBuilder()
+person = builder.set_first_name("Jules").set_last_name("Skrill").set_age(27).execute()
+print(person.first_name, person.last_name, person.age)
 
 
 def convert_base(
@@ -205,8 +230,20 @@ def get_lexical_rank(string1, string2):
     return lex_avg
 
 
-for str1, str2 in [("ba", "babc"), ("b", "c"), ("c", "caab"), ("aaa", "c")]:
-    ave = get_lexical_rank(str1, str2)
-    assert str1 < ave
-    assert ave < str2
-    print(ave)
+# for str1, str2 in [("ba", "babc"), ("b", "c"), ("c", "caab"), ("aaa", "c")]:
+#     ave = get_lexical_rank(str1, str2)
+#     assert str1 < ave
+#     assert ave < str2
+#     print(ave)
+
+
+class Shape:
+    smiles = {"very": "happy"}
+
+
+class Square(Shape):
+    pass
+
+
+class Circle(Shape):
+    pass

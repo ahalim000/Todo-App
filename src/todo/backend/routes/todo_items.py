@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends
-from todo.backend.dependencies import get_db
-from todo.backend.storage.database import SessionLocal
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from todo.backend.dependencies import get_db, get_current_user, get_storage_manager
 from todo.backend.storage.models import Todo, TodoItem
 from todo.backend.ranking import get_lexical_rank
 from pydantic import BaseModel
+
+from todo.backend.storage.storage_manager import StorageManager
 
 MAX_RANK_LENGTH = 128
 
@@ -17,21 +20,41 @@ class TodoItemUpdateSchema(BaseModel):
     message: str
 
 
-router = APIRouter(prefix="/api/todoitems")
+class TodoItemSchema(BaseModel):
+    id: int
+    message: str
+    active: bool
+    todo_id: int
+
+    class Config:
+        orm_mode = True
 
 
-@router.get("/")
-def list_todo_items(db: SessionLocal = Depends(get_db)):
-    todo_items = []
-    for todo_item in db.query(TodoItem):
-        todo_items.append(todo_item.to_dict())
+class ListTodoItemSchema(BaseModel):
+    items: List[TodoItemSchema]
 
+
+router = APIRouter(
+    prefix="/api/todoitems",
+    dependencies=[Depends(get_current_user)],
+)
+
+
+@router.get("", response_model=ListTodoItemSchema)
+def list_todo_items(todo_id: Optional[int] = None, sm: StorageManager = Depends(get_storage_manager)):
+    filters = {}
+    if todo_id is not None:
+        filters["todo_id"] = todo_id
+
+    todo_items = sm.list(TodoItem, filters, [TodoItem.todo_id, TodoItem.position])
     return {"items": todo_items}
 
 
-@router.post("/")
-def create_todo_items(request_data: TodoItemCreateSchema, db: SessionLocal = Depends(get_db)):
-    todo = db.query(Todo).filter_by(id=request_data.todo_id).one()
+@router.post("", response_model=TodoItemSchema)
+def create_todo_items(
+    request_data: TodoItemCreateSchema, sm: StorageManager = Depends(get_storage_manager), db: Session = Depends(get_db)
+):
+    todo = sm.get(Todo, {"id": request_data.todo_id})
     todo_item = TodoItem(todo_id=request_data.todo_id, message=request_data.message)
 
     needs_reorder = False
@@ -59,40 +82,30 @@ def create_todo_items(request_data: TodoItemCreateSchema, db: SessionLocal = Dep
         db.add(todo)
         db.commit()
 
-    return todo_item.to_dict()
+    return todo_item
 
 
-@router.get("/{id}")
-def get_todo_item(id: int, db: SessionLocal = Depends(get_db)):
-    todo_item = db.query(TodoItem).filter_by(id=id).one()
-
-    return todo_item.to_dict()
+@router.get("/{id}", response_model=TodoItemSchema)
+def get_todo_item(id: int, sm: StorageManager = Depends(get_storage_manager)):
+    return sm.get(TodoItem, {"id": id})
 
 
-@router.put("/{id}")
-def update_todo_item(id: int, request_data: TodoItemUpdateSchema, db: SessionLocal = Depends(get_db)):
-    todo_item = db.query(TodoItem).filter_by(id=id).one()
-    todo_item.message = request_data.message
-    db.add(todo_item)
-    db.commit()
-
-    return todo_item.to_dict()
+@router.put("/{id}", response_model=TodoItemSchema)
+def update_todo_item(id: int, request_data: TodoItemUpdateSchema, sm: StorageManager = Depends(get_storage_manager)):
+    return sm.update(TodoItem, {"id": id}, request_data.dict())
 
 
-@router.delete("/{id}")
-def delete_todo_item(id: int, db: SessionLocal = Depends(get_db)):
-    todo_item = db.query(TodoItem).filter_by(id=id).one()
-    db.delete(todo_item)
-    db.commit()
-
-    return todo_item.to_dict()
+@router.delete("/{id}", response_model=TodoItemSchema)
+def delete_todo_item(id: int, sm: StorageManager = Depends(get_storage_manager)):
+    return sm.delete(TodoItem, {"id": id})
 
 
-@router.put("/{id}/toggle")
-def toggle_todo_item(id: int, db: SessionLocal = Depends(get_db)):
-    todo_item = db.query(TodoItem).filter_by(id=id).one()
+@router.put("/{id}/toggle", response_model=TodoItemSchema)
+def toggle_todo_item(id: int, sm: StorageManager = Depends(get_storage_manager), db: Session = Depends(get_db)):
+    todo_item = sm.get(TodoItem, {"id": id})
     todo_item.active = not todo_item.active
+
     db.add(todo_item)
     db.commit()
 
-    return todo_item.to_dict()
+    return todo_item

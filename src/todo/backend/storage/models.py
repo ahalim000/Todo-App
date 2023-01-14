@@ -1,11 +1,32 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declared_attr, declarative_mixin, synonym
+from sqlalchemy.ext.associationproxy import association_proxy
 
 from todo.backend.ranking import get_lexical_rank
 from todo.backend.storage.database import Base
 
 
-class Todo(Base):
+@declarative_mixin
+class OwnerIdMixin:
+    @declared_attr
+    def owner_id(cls):
+        return Column(Integer, ForeignKey("user.id"))
+
+
+class User(OwnerIdMixin, Base):
+    __tablename__ = "user"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String, unique=True)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+
+    @declared_attr
+    def owner_id(cls):
+        return synonym("id")
+
+
+class Todo(OwnerIdMixin, Base):
     __tablename__ = "todo"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -31,33 +52,17 @@ class Todo(Base):
         self._rerank_todo_items(start_idx, mid_idx)
         self._rerank_todo_items(mid_idx, end_idx)
 
-    def to_dict(self):
-        todo_items = [todo_item.to_dict() for todo_item in self.todo_items]
-        for idx, todo_item in enumerate(todo_items):
-            todo_item["index"] = idx
 
-        res = {"id": self.id, "name": self.name, "todo_items": todo_items}
-
-        return res
-
-
-class TodoItem(Base):
+class TodoItem(OwnerIdMixin, Base):
     __tablename__ = "todo_item"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     message = Column(String, nullable=False)
-    todo_id = Column(Integer, ForeignKey(Todo.id))
     position = Column(String, nullable=False)
     active = Column(Boolean, nullable=False, default=True)
+    todo_id = Column(Integer, ForeignKey(Todo.id))
     todo = relationship("Todo", back_populates="todo_items")
 
-    def to_dict(self):
-        res = {
-            "id": self.id,
-            "message": self.message,
-            "todo_id": self.todo_id,
-            "active": self.active,
-            "position": self.position,
-        }
-
-        return res
+    @declared_attr
+    def owner_id(cls):
+        return association_proxy("todo", "owner_id")
