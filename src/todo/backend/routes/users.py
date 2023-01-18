@@ -89,7 +89,7 @@ def create_user(request_data: UserCreateSchema, db: Session = Depends(get_db)):
     db.add(user)
 
     try:
-        db.commit()
+        db.flush()
     except IntegrityError as e:
         if "already exists" in str(e):
             raise HTTPException(400, detail=f"Username '{request_data.username}' already taken")

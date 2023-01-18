@@ -1,5 +1,5 @@
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, HTTPException
 
 from todo.backend.storage.database import SessionLocal
 from todo.backend.routes import todos, todo_items, users
@@ -11,6 +11,13 @@ async def db_session_middleware(request: Request, call_next):
     try:
         request.state.db = SessionLocal()
         response = await call_next(request)
+        if response.status_code < 300:
+            request.state.db.commit()
+        else:
+            request.state.db.rollback()
+    except Exception:
+        request.state.db.rollback()
+        raise
     finally:
         request.state.db.close()
     return response

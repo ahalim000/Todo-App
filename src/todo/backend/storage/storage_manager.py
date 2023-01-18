@@ -41,7 +41,7 @@ class StorageManager:
         item = model_cls(**data)
 
         self.db.add(item)
-        self.db.commit()
+        self.db.flush()
 
         return item
 
@@ -73,7 +73,7 @@ class StorageManager:
             setattr(item, key, val)
 
         self.db.add(item)
-        self.db.commit()
+        self.db.flush()
 
         return item
 
@@ -89,6 +89,6 @@ class StorageManager:
             raise HTTPException(400, detail=f"{model_cls.__name__} doesn't exist")
 
         self.db.delete(item)
-        self.db.commit()
+        self.db.flush()
 
         return item

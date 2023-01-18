@@ -1,69 +1,6 @@
-import os, secrets
-import pytest
-
-from datetime import datetime, timedelta
-from functools import wraps
-from fastapi.testclient import TestClient
-
-os.environ["TODO_DATABASE_URL"] = "postgresql:///test_todo"
-os.environ["TODO_SECRET_KEY"] = secrets.token_hex(32)
-
-from todo.backend.storage.database import SessionLocal, Base, engine
-from todo.backend.routes.users import hash_password, create_oauth_token
-from todo.backend.storage import models  # Exectuted for side effect
-from todo.backend.app import init_app
-from todo.backend.dependencies import get_db
-
-DB_SEEDED = False
-
-app = init_app()
-client = TestClient(app)
-
-
-def get_token(username):
-    return create_oauth_token({"sub": username, "exp": datetime.utcnow() + timedelta(minutes=60)})
-
-
-@pytest.fixture(autouse=True, scope="function")
-def db():
-    global DB_SEEDED
-
-    db = SessionLocal()
-    if not DB_SEEDED:
-        Base.metadata.drop_all(bind=engine)
-        Base.metadata.create_all(bind=engine)
-        admin = models.User(username="admin", hashed_password=hash_password("admin"), role="admin")
-        user_1 = models.User(username="user1", hashed_password=hash_password("user1"), role="user")
-        user_2 = models.User(username="user2", hashed_password=hash_password("user2"), role="user")
-        db.add_all([admin, user_1, user_2])
-        db.commit()
-
-        todo_1 = models.Todo(name="Todo 1", owner_id=user_1.id)
-        for i in range(10):
-            todo_1.todo_items.append(models.TodoItem(message=f"Paper Crane {i + 1}", position=chr(i + 97)))
-
-        todo_2 = models.Todo(name="Todo 2", owner_id=user_2.id)
-        for i in range(10):
-            todo_2.todo_items.append(models.TodoItem(message=f"Paper Boats {i + 2}", position=chr(i + 97)))
-
-        db.add_all([todo_1, todo_2])
-        db.commit()
-        DB_SEEDED = True
-
-    def new_save_point_commit(original_func):
-        def wrapper():
-            db.begin_nested()
-            original_func()
-
-        return wrapper
-
-    db.commit = new_save_point_commit(db.commit)
-    app.dependency_overrides[get_db] = lambda: db
-
-    savepoint = db.begin_nested()
-    yield db
-    savepoint.rollback()
-    db.close()
+from tests.conftest import client
+from tests.utils import get_token
+from todo.backend.storage import models
 
 
 def test_authentication():
@@ -106,24 +43,134 @@ def test_list_todo():
 
 
 def test_create_todo(db):
-    # user_1 = db.query(models.User).filter_by(username="user1").one()
-    # user_1_token = get_token("user1")
-    # response = client.post("/api/todos", headers={"Authorization": f"Bearer {user_1_token}"}, json={"name": "Todo 3"})
-    # assert response.status_code == 200
-    # data = response.json()
-    # assert data["name"] == "Todo 3"
-    # assert data["owner_id"] == user_1.owner_id
-    # assert len(db.query(models.Todo).filter_by(owner_id=user_1.id).all()) == 2
-    # for i in range(10):
-    #     response = client.post(
-    #         "/api/todos", headers={"Authorization": f"Bearer {user_1_token}"}, json={"name": "Todo 3"}
-    #     )
-    #     assert len(db.query(models.Todo).filter_by(owner_id=user_1.id).all()) == 3 + i
+    user_1 = db.query(models.User).filter_by(username="user1").one()
+    user_1_token = get_token("user1")
+    response = client.post("/api/todos", headers={"Authorization": f"Bearer {user_1_token}"}, json={"name": "Todo 3"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Todo 3"
+    assert data["owner_id"] == user_1.id
+    assert len(db.query(models.Todo).filter_by(owner_id=user_1.id).all()) == 2
+    for i in range(10):
+        response = client.post(
+            "/api/todos", headers={"Authorization": f"Bearer {user_1_token}"}, json={"name": f"Todo {3 + i}"}
+        )
+        assert len(db.query(models.Todo).filter_by(owner_id=user_1.id).all()) == 2 + (i + 1)
 
-    user_3 = models.User(username="user3", hashed_password=hash_password("user2"), role="user")
-    db.add(user_3)
-    db.commit()
-    user_4 = models.User(username="user4", hashed_password=hash_password("user2"), role="user")
-    db.add(user_4)
-    db.commit()
-    print(user_4.owner_id)
+
+def test_get_todo():
+    id = 1
+    admin_token = get_token("admin")
+    response = client.get(f"/api/todos/{id}", headers={"Authorization": f"Bearer {admin_token}"}, params={"id": id})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == id
+
+    user_1_token = get_token("user1")
+    response = client.get(f"/api/todos/{id}", headers={"Authorization": f"Bearer {user_1_token}"}, params={"id": id})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == id
+
+    user_2_token = get_token("user2")
+    response = client.get(f"/api/todos/{id}", headers={"Authorization": f"Bearer {user_2_token}"}, params={"id": id})
+    assert response.status_code == 400
+
+
+def test_update_todo():
+    id = 1
+    admin_token = get_token("admin")
+    response = client.put(
+        f"/api/todos/{id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        params={"id": id},
+        json={"name": "Test Name"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Test Name"
+
+    user_1_token = get_token("user1")
+    response = client.put(
+        f"/api/todos/{id}",
+        headers={"Authorization": f"Bearer {user_1_token}"},
+        params={"id": id},
+        json={"name": "Test Name"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Test Name"
+
+    user_2_token = get_token("user2")
+    response = client.put(
+        f"/api/todos/{id}",
+        headers={"Authorization": f"Bearer {user_2_token}"},
+        params={"id": id},
+        json={"name": "Test Name"},
+    )
+    assert response.status_code == 400
+
+
+def test_delete_todo(db):
+    id = 1
+    admin_token = get_token("admin")
+    todo = db.query(models.Todo).filter_by(id=id).one()
+    response = client.delete(f"/api/todos/{id}", headers={"Authorization": f"Bearer {admin_token}"}, params={"id": id})
+    assert response.status_code == 200
+    todos = db.query(models.Todo).all()
+    assert todo not in todos
+
+    id = 2
+    user_1_token = get_token("user1")
+    response = client.delete(f"/api/todos/{id}", headers={"Authorization": f"Bearer {user_1_token}"}, params={"id": id})
+    assert response.status_code == 400
+
+    user_2_token = get_token("user2")
+    todo = db.query(models.Todo).filter_by(id=id).one()
+    response = client.delete(f"/api/todos/{id}", headers={"Authorization": f"Bearer {user_2_token}"}, params={"id": id})
+    assert response.status_code == 200
+    todos = db.query(models.Todo).all()
+    assert todo not in todos
+
+
+def test_reorder_todo(db):
+    id = 1
+    admin_token = get_token("admin")
+    todo = db.query(models.Todo).filter_by(id=id).one()
+    todo_item = todo.todo_items[4]
+    response = client.put(
+        f"/api/todos/{id}/reorder",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        params={"id": id},
+        json={"todo_item_id": todo_item.id, "insert_idx": 7},
+    )
+    assert response.status_code == 204
+    assert todo.todo_items[7] == todo_item
+
+    user_1_token = get_token("user1")
+    todo = db.query(models.Todo).filter_by(id=id).one()
+    todo_item = todo.todo_items[0]
+    for idx in [9, 0, 3, 3, 20, -3]:
+        if idx < 0:
+            idx = 0
+        if idx >= len(todo.todo_items):
+            idx = len(todo.todo_items) - 1
+        response = client.put(
+            f"/api/todos/{id}/reorder",
+            headers={"Authorization": f"Bearer {user_1_token}"},
+            params={"id": id},
+            json={"todo_item_id": todo_item.id, "insert_idx": idx},
+        )
+        assert response.status_code == 204
+        assert todo.todo_items[idx] == todo_item
+
+    user_2_token = get_token("user2")
+    todo = db.query(models.Todo).filter_by(id=id).one()
+    todo_item = todo.todo_items[4]
+    response = client.put(
+        f"/api/todos/{id}/reorder",
+        headers={"Authorization": f"Bearer {user_2_token}"},
+        params={"id": id},
+        json={"todo_item_id": todo_item.id, "insert_idx": 7},
+    )
+    assert response.status_code == 400

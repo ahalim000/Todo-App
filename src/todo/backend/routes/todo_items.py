@@ -25,6 +25,7 @@ class TodoItemSchema(BaseModel):
     message: str
     active: bool
     todo_id: int
+    owner_id: int
 
     class Config:
         orm_mode = True
@@ -74,13 +75,13 @@ def create_todo_items(
         db.add(prev_last)
 
     db.add(todo_item)
-    db.commit()
+    db.flush()
 
     if needs_reorder:
         db.refresh(todo)
         todo.rerank_todo_items()
         db.add(todo)
-        db.commit()
+        db.flush()
 
     return todo_item
 
@@ -106,6 +107,6 @@ def toggle_todo_item(id: int, sm: StorageManager = Depends(get_storage_manager),
     todo_item.active = not todo_item.active
 
     db.add(todo_item)
-    db.commit()
+    db.flush()
 
     return todo_item

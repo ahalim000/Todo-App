@@ -75,7 +75,7 @@ def delete_todo(id: int, sm: StorageManager = Depends(get_storage_manager)):
     return sm.delete(Todo, {"id": id})
 
 
-@router.put("/{id}/reorder", status_code=201)
+@router.put("/{id}/reorder", status_code=204)
 def reorder_todo(
     id: int,
     request_data: TodoReorderSchema,
@@ -115,6 +115,6 @@ def reorder_todo(
         )
 
     db.add(todo)
-    db.commit()
+    db.flush()
 
     return Response(status_code=204)
